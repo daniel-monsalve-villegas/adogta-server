@@ -1,16 +1,17 @@
-const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
+const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
 
-const foundationSchema = mongoose.Schema(
+const FoundationSchema = mongoose.Schema(
   {
     email: {
       type: String,
-      match: /.+\@.+\..+/,
-      required: [true, "Email is required"],
+      match: /.+@.+\..+/,
+      required: [true, 'Email is required'],
       validate: {
-        validator: async function (value) {
+        // TODO: check thing about arrow function problem with variable Foundation and without arrow when say "expected"
+        validator: async (value) {
           const foundation = await Foundation.findOne({ email: value });
-          const user = await mongoose.model("User").findOne({ email: value });
+          const user = await mongoose.model('User').findOne({ email: value });
           if (foundation) {
             return foundation === null;
           } else if (foundation === user) {
@@ -18,16 +19,16 @@ const foundationSchema = mongoose.Schema(
           }
           return foundation;
         },
-        message: "Email is already taken",
+        message: 'Email is already taken',
       },
     },
     password: {
       type: String,
-      required: [true, "Password is required"],
+      required: [true, 'Password is required'],
     },
     name: {
       type: String,
-      required: [true, "Name is required"],
+      required: [true, 'Name is required'],
     },
     address: {
       type: String,
@@ -37,7 +38,7 @@ const foundationSchema = mongoose.Schema(
     },
     role: {
       type: String,
-      required: [true, " Role is required"],
+      required: [true, ' Role is required'],
     },
     active: {
       type: Boolean,
@@ -50,12 +51,14 @@ const foundationSchema = mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
-foundationSchema.pre("save", async function (next) {
+FoundationSchema.pre('save', async function (next) {
+  const foundation = this;
   try {
-    const hash = await bcrypt.hash(this.password, 10);
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash(foundation.password, salt);
     this.password = hash;
     next();
   } catch (err) {
@@ -63,7 +66,7 @@ foundationSchema.pre("save", async function (next) {
   }
 });
 
-foundationSchema.statics.authenticate = async (email, password) => {
+FoundationSchema.statics.authenticate = async (email, password) => {
   const foundation = await Foundation.findOne({ email });
   if (foundation) {
     const result = await bcrypt.compare(password, foundation.password);
@@ -73,6 +76,6 @@ foundationSchema.statics.authenticate = async (email, password) => {
   return null;
 };
 
-const Foundation = mongoose.model("Foundation", foundationSchema);
+const Foundation = mongoose.model('Foundation', FoundationSchema);
 
 module.exports = Foundation;
