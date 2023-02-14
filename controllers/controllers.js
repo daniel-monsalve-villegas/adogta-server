@@ -8,11 +8,11 @@ const config = require('../config/index');
 const Pet = require('../models/Pet');
 const AdoptionRequest = require('../models/AdoptionRequest');
 const sendEmailRequest = require('../utils/sendEmailRequest');
+const sendMail = require('../utils/sendMail');
 require('dotenv').config();
 
 const { templateApproved } = config;
 const { templateRejected } = config;
-const sendMail = require('../utils/sendMail');
 
 const createUser = async (req, res, next) => {
   const { email, role } = req.body;
@@ -111,7 +111,7 @@ const createRequest = async (req, res, next) => {
         {
           phoneNumber: req.body.phoneNumber,
           address: req.body.address,
-        }
+        },
       );
 
       await sendMail({
@@ -165,7 +165,7 @@ const listFoundationsAdmin = async (req, res, next) => {
       {
         skip: (page - 1) * 5,
         limit: 5,
-      }
+      },
     )
       .collation({ locale: 'en' })
       .sort({ name: 1 });
@@ -184,7 +184,7 @@ const listFoundations = async (req, res, next) => {
       {
         skip: (page - 1) * 10,
         limit: 10,
-      }
+      },
     )
       .collation({ locale: 'en' })
       .sort({ name: 1 });
@@ -200,7 +200,7 @@ const listUsers = async (req, res, next) => {
     const users = await User.find(
       {},
       { password: 0, __v: 0, role: 0 },
-      { skip: (page - 1) * 5, limit: 5 }
+      { skip: (page - 1) * 5, limit: 5 },
     )
       .collation({ locale: 'en' })
       .sort({ name: 1 });
@@ -226,7 +226,7 @@ const listPets = async (req, res, next) => {
       {
         skip: (page - 1) * 10,
         limit: 10,
-      }
+      },
     ).sort({ createdAt: -1 });
     res.status(200).json({ page, count, pets });
   } catch (e) {
@@ -291,9 +291,9 @@ const createPet = async (req, res, next) => {
               if (err) {
                 return next(error);
               }
-            }
+            },
           );
-        }
+        },
       );
     }
   } catch (error) {
@@ -343,7 +343,7 @@ const updateProfile = async (req, res, next) => {
             _id,
           });
           return;
-        }
+        },
       );
     } else {
       await schemas[role].findByIdAndUpdate(_id, data);
@@ -403,7 +403,7 @@ const updateRequest = async (req, res, next) => {
       {
         responseStatus: req.body.responseStatus,
       },
-      { new: true }
+      { new: true },
     )
       .populate('userId')
       .populate('petId');
@@ -414,7 +414,7 @@ const updateRequest = async (req, res, next) => {
         },
         {
           adopted: true,
-        }
+        },
       );
       let varPhoto = '';
       if (pet.photoUrl) varPhoto = pet.photoUrl[0];
@@ -461,7 +461,7 @@ const bulkReject = async (req, res, next) => {
       {
         responseStatus: 'rejected',
       },
-      { new: true }
+      { new: true },
     );
 
     // There is no method to update multiple documents and return all updated documents in mongoose.
@@ -499,7 +499,7 @@ const listFoundationRequests = async (req, res, next) => {
       model: Pet,
     });
     const reqs = response.filter(
-      (request) => request.petId.foundationId.toString() === req.params.id
+      (request) => request.petId.foundationId.toString() === req.params.id,
     );
     res.status(200).json(reqs);
   } catch (e) {
@@ -545,14 +545,14 @@ const adminSearch = async (req, res, next) => {
       let users = await User.find(
         toSearch,
         { password: 0, __v: 0, role: 0 },
-        { skip: (page - 1) * 5, limit: 5 }
+        { skip: (page - 1) * 5, limit: 5 },
       );
       res.status(200).json(users);
     } else {
       let foundation = await Foundation.find(
         toSearch,
         { password: 0, __v: 0, role: 0 },
-        { skip: (page - 1) * 5, limit: 5 }
+        { skip: (page - 1) * 5, limit: 5 },
       );
       res.status(200).json(foundation);
     }

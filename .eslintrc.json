@@ -5,14 +5,32 @@
     "es2021": true,
     "node": true
   },
-  "extends": ["airbnb-base", "eslint:recommended"],
+  "extends": [
+    "airbnb-base",
+    "eslint:recommended"
+  ],
   "overrides": [],
   "parserOptions": {
     "ecmaVersion": "latest"
   },
   "rules": {
-    "semi": ["error", "always"],
-    "no-unused-vars": ["warn"],
-    "no-var": ["error"]
+    "semi": [
+      "error",
+      "always"
+    ],
+    "no-unused-vars": [
+      "warn"
+    ],
+    "no-var": [
+      "error"
+    ],
+    "no-underscore-dangle": [
+      "error",
+      {
+        "allow": [
+          "_id"
+        ]
+      }
+    ]
   }
 }

@@ -20,15 +20,18 @@ bb.extend(app, {
   mimeTypeLimit: ['image/jpeg', 'image/png'],
 });
 
-process.env.NODE_ENV === 'test'
-  ? mongoose.connect(
-      config.dbConnectionStringTest,
-      console.log('Connected to db-test')
-    )
-  : mongoose.connect(config.dbConnectionString, console.log('Connected to db'));
+if (process.env.NODE_ENV === 'test') {
+  mongoose.connect(
+    config.dbConnectionStringTest,
+    console.log('Connected to db-test'),
+  );
+} else {
+  mongoose.connect(config.dbConnectionString, console.log('Connected to db'));
+}
 
-mongoose.connection.on('error', function (e) {
+mongoose.connection.on('error', (e) => {
   console.error(e);
+  process.exit(1);
 });
 
 // routes that will be used

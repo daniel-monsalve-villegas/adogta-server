@@ -8,14 +8,13 @@ const FoundationSchema = mongoose.Schema(
       match: /.+@.+\..+/,
       required: [true, 'Email is required'],
       validate: {
-        // TODO: check thing about arrow function problem with variable Foundation and without arrow when say "expected"
-        validator: async (value) {
-          const foundation = await Foundation.findOne({ email: value });
+        validator: async (value) => {
+          const foundation = await mongoose
+            .model('Foundation')
+            .findOne({ email: value });
           const user = await mongoose.model('User').findOne({ email: value });
-          if (foundation) {
-            return foundation === null;
-          } else if (foundation === user) {
-            return foundation === null;
+          if (foundation || user) {
+            return null;
           }
           return foundation;
         },
@@ -54,7 +53,7 @@ const FoundationSchema = mongoose.Schema(
   },
 );
 
-FoundationSchema.pre('save', async function (next) {
+FoundationSchema.pre('save', async (next) => {
   const foundation = this;
   try {
     const salt = await bcrypt.genSalt(10);
@@ -67,7 +66,7 @@ FoundationSchema.pre('save', async function (next) {
 });
 
 FoundationSchema.statics.authenticate = async (email, password) => {
-  const foundation = await Foundation.findOne({ email });
+  const foundation = await mongoose.model('Foundation').findOne({ email });
   if (foundation) {
     const result = await bcrypt.compare(password, foundation.password);
     return result === true ? foundation : null;
