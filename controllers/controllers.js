@@ -1,11 +1,12 @@
-const jwt = require('jsonwebtoken');
-const cloudinary = require('cloudinary').v2;
-const fs = require('fs');
 const crypto = require('crypto');
-const User = require('../models/User');
-const Foundation = require('../models/Foundation');
+const fs = require('fs');
+const jwt = require('jsonwebtoken');
+const cloudinary = require('cloudinary');
+const regeneratorRuntime = require('regenerator-runtime');
 const config = require('../config/index');
+const User = require('../models/User');
 const Pet = require('../models/Pet');
+const Foundation = require('../models/Foundation');
 const AdoptionRequest = require('../models/AdoptionRequest');
 const sendEmailRequest = require('../utils/sendEmailRequest');
 const sendMail = require('../utils/sendMail');
@@ -35,7 +36,7 @@ const createUser = async (req, res, next) => {
 
     const token = jwt.sign({ userId: user._id }, config.jwtKey);
 
-    await sendMail({
+    sendMail({
       to: email,
       template_id: config.senGridTemplateEmailVerification,
       dynamic_template_data: {
@@ -67,20 +68,20 @@ const verifiedEmail = async (req, res) => {
   try {
     let user = await User.findOneAndUpdate(filter, update);
 
-    let token;
+    let newToken;
 
     if (user) {
-      token = jwt.sign({ userId: user._id }, config.jwtKey);
+      newToken = jwt.sign({ userId: user._id }, config.jwtKey);
     } else {
       user = await Foundation.findOneAndUpdate(filter, update);
-      token = jwt.sign({ userId: user._id }, config.jwtKey);
+      newToken = jwt.sign({ userId: user._id }, config.jwtKey);
     }
 
     if (!user) {
-      return res.status(404).end();
+      res.status(404).end();
     }
 
-    return res.status(200).json({ user, token });
+    res.status(200).json({ user, newToken });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -96,7 +97,7 @@ const createRequest = async (req, res, next) => {
     });
 
     if (sameAdoptions.length >= 1) {
-      return res
+      res
         .status(422)
         .json({ error: 'You have already sent a request to adopt this pet' });
     } else {
@@ -107,18 +108,18 @@ const createRequest = async (req, res, next) => {
       });
 
       await User.updateOne(
-        { _id: _id },
+        { _id },
         {
           phoneNumber: req.body.phoneNumber,
           address: req.body.address,
         },
       );
 
-      await sendMail({
+      sendMail({
         to: email,
         template_id: config.senGridTemplateId,
         dynamic_template_data: {
-          name: name,
+          name,
         },
       });
 
@@ -135,11 +136,19 @@ const createRequest = async (req, res, next) => {
 
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    let user = await User.authenticate(email, password);
+    const { email: userEmail, password } = req.body;
+    const user = await User.authenticate(userEmail, password);
     if (user) {
       const token = jwt.sign({ userId: user._id }, config.jwtKey);
-      const { _id, name, email, role, address, phoneNumber, photoUrl } = user;
+      const {
+        _id,
+        name,
+        email,
+        role,
+        address,
+        phoneNumber,
+        photoUrl,
+      } = user;
       res.json({
         token,
         _id,
@@ -171,7 +180,7 @@ const listFoundationsAdmin = async (req, res, next) => {
       .sort({ name: 1 });
     res.status(200).json(foundations);
   } catch (e) {
-    return next(e);
+    next(e);
   }
 };
 
@@ -190,7 +199,7 @@ const listFoundations = async (req, res, next) => {
       .sort({ name: 1 });
     res.status(200).json(foundations);
   } catch (e) {
-    return next(e);
+    next(e);
   }
 };
 
@@ -206,14 +215,29 @@ const listUsers = async (req, res, next) => {
       .sort({ name: 1 });
     res.status(200).json(users);
   } catch (e) {
-    return next(e);
+    next(e);
   }
 };
 
 const loadUser = async (req, res) => {
-  const { _id, name, email, address, phoneNumber, role, photoUrl } =
-    res.locals.user;
-  res.json({ _id, name, email, address, phoneNumber, role, photoUrl });
+  const {
+    _id,
+    name,
+    email,
+    address,
+    phoneNumber,
+    role,
+    photoUrl,
+  } = res.locals.user;
+  res.json({
+    _id,
+    name,
+    email,
+    address,
+    phoneNumber,
+    role,
+    photoUrl,
+  });
 };
 
 const listPets = async (req, res, next) => {
@@ -244,7 +268,7 @@ const destroyPet = async (req, res, next) => {
 };
 
 const createPet = async (req, res, next) => {
-  let imagesFiles = req.files;
+  const imagesFiles = req.files;
   const { name, age, description } = req.body;
 
   const data = {
@@ -266,35 +290,32 @@ const createPet = async (req, res, next) => {
       };
     }
 
-    let petPhotos = [];
-    for (let i = 0; i < arrayOfImagesFiles.photoUrl.length; i++) {
-      cloudinary.uploader.upload(
-        arrayOfImagesFiles.photoUrl[i].file,
-        async function (error, result) {
-          if (error) {
-            return next(error);
-          }
-          petPhotos.push(result.url);
-          dataPet = {
-            ...data,
-            photoUrl: [...petPhotos],
-          };
-          if (dataPet.photoUrl.length === arrayOfImagesFiles.photoUrl.length) {
-            const pet = new Pet(dataPet);
-            await pet.save();
-            res.status(201).json(pet);
-          }
-          fs.rm(
-            `uploads/${arrayOfImagesFiles.photoUrl[i].uuid}`,
-            { recursive: true },
-            (err) => {
-              if (err) {
-                return next(error);
-              }
-            },
-          );
-        },
-      );
+    const petPhotos = [];
+
+    const uploadPhoto = async (photo, i) => {
+      try {
+        const result = await cloudinary.uploader.upload(photo.file);
+        petPhotos.push(result.url);
+
+        const dataPet = {
+          ...data,
+          photoUrl: [...petPhotos],
+        };
+
+        if (dataPet.photoUrl.length === arrayOfImagesFiles.photoUrl.length) {
+          const pet = new Pet(dataPet);
+          await pet.save();
+          res.status(201).json(pet);
+        }
+
+        await fs.promises.rm(`upload/${arrayOfImagesFiles.photoUrl[i].uuid}`, { recursive: true });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    for (let i = 0; i < arrayOfImagesFiles.photoUrl.length; i += 1) {
+      uploadPhoto(arrayOfImagesFiles.photoUrl[i], i);
     }
   } catch (error) {
     res
@@ -304,8 +325,16 @@ const createPet = async (req, res, next) => {
 };
 
 const updateProfile = async (req, res, next) => {
-  const { name, address, email, phoneNumber, photoUrl, _id, role } = req.body;
-  data = {
+  const {
+    name,
+    address,
+    email,
+    phoneNumber,
+    photoUrl,
+    _id,
+    role,
+  } = req.body;
+  const data = {
     name,
     address,
     phoneNumber,
@@ -315,42 +344,45 @@ const updateProfile = async (req, res, next) => {
   };
   const imageFile = req.files.image;
   const schemas = { user: User, foundation: Foundation };
+
+  const uploadCallBack = async (error, result) => {
+    if (error) {
+      next(error);
+    }
+    fs.rm(`uploads/${imageFile.uuid}`, { recursive: true }, (err) => {
+      if (err) {
+        next(err);
+      }
+    });
+
+    await schemas[role].findByIdAndUpdate(_id, {
+      ...data,
+      photoUrl: result.url,
+    });
+    res.status(200).json({
+      name,
+      email,
+      address,
+      phoneNumber,
+      role,
+      photoUrl: result.url,
+      _id,
+    });
+  };
+
   try {
     if (imageFile) {
-      cloudinary.uploader.upload(
-        imageFile.file,
-        async function (error, result) {
-          if (error) {
-            return next(error);
-          }
-          fs.rm(`uploads/${imageFile.uuid}`, { recursive: true }, (err) => {
-            if (err) {
-              return next(error);
-            }
-          });
-
-          await schemas[role].findByIdAndUpdate(_id, {
-            ...data,
-            photoUrl: result.url,
-          });
-          res.status(200).json({
-            name,
-            email,
-            address,
-            phoneNumber,
-            role,
-            photoUrl: result.url,
-            _id,
-          });
-          return;
-        },
-      );
+      cloudinary.uploader.upload(imageFile.file, uploadCallBack);
     } else {
       await schemas[role].findByIdAndUpdate(_id, data);
-      res
-        .status(200)
-        .json({ name, email, address, phoneNumber, role, photoUrl, _id });
-      return;
+      res.status(200).json({
+        name,
+        email,
+        phoneNumber,
+        role,
+        photoUrl,
+        _id,
+      });
     }
   } catch (error) {
     res.status(401).json({ error: 'User not found' });
@@ -385,7 +417,7 @@ const deleteFoundation = async (req, res, next) => {
 
 const listRequests = async (req, res, next) => {
   try {
-    response = await AdoptionRequest.find({
+    const response = await AdoptionRequest.find({
       petId: req.params.petId,
     }).populate('userId');
     res.status(200).json(response);
@@ -405,8 +437,7 @@ const updateRequest = async (req, res, next) => {
       },
       { new: true },
     )
-      .populate('userId')
-      .populate('petId');
+      .populate('userId').populate('petId');
     if (req.body.responseStatus === 'approved') {
       const pet = await Pet.findOneAndUpdate(
         {
@@ -416,38 +447,46 @@ const updateRequest = async (req, res, next) => {
           adopted: true,
         },
       );
-      let varPhoto = '';
-      if (pet.photoUrl) varPhoto = pet.photoUrl[0];
+      const varPhoto = '';
+      if (pet.photoUrl) varPhoto[0] = pet.photoUrl;
       sendEmailRequest({
         template_id: templateApproved,
         dynamic_template_data: {
           name: pet.name,
           photoUrl: varPhoto,
         },
-        to: request['userId'].email,
+        to: request.userId.email,
       });
     } else {
-      let varPhoto = '';
-      if (request['petId'].photoUrl) varPhoto = request['petId'].photoUrl[0];
+      const varPhoto = '';
+      if (request.petId.photoUrl) varPhoto[0] = request.petId.photoUrl;
       sendEmailRequest({
         template_id: templateRejected,
         dynamic_template_data: {
-          name: request['petId'].name,
+          name: request.petId.name,
           photoUrl: varPhoto,
         },
-        to: request['userId'].email,
+        to: request.userId.email,
       });
     }
-    let { _id, userId, petId, description, responseStatus, updatedAt } =
-      request;
-    petId = request['petId']._id;
-    userId = request['userId']._id;
-    res
-      .status(200)
-      .json({ _id, userId, petId, description, responseStatus, updatedAt });
-  } catch (e) {
-    console.error(e);
-    next(e);
+    const [userId, petId] = [request.userId._id, request.petId._id];
+    const {
+      _id,
+      description,
+      responseStatus,
+      updatedAt,
+    } = request;
+    res.status(200).json({
+      _id,
+      petId,
+      userId,
+      description,
+      responseStatus,
+      updatedAt,
+    });
+  } catch (error) {
+    console.error(error);
+    next(error);
   }
 };
 
@@ -464,7 +503,6 @@ const bulkReject = async (req, res, next) => {
       { new: true },
     );
 
-    // There is no method to update multiple documents and return all updated documents in mongoose.
     const request = await AdoptionRequest.find({
       petId: req.params.petId,
       _id: { $ne: req.body._id },
@@ -472,19 +510,19 @@ const bulkReject = async (req, res, next) => {
       .populate('userId')
       .populate('petId');
 
-    for (const adoption of request) {
-      const userMail = adoption['userId'].email;
-      let varPhoto = '';
-      if (adoption['petId'].photoUrl) varPhoto = adoption['petId'].photoUrl[0];
+    request.forEach((adoption) => {
+      const userMail = adoption.userId.email;
+      const varPhoto = '';
+      if (adoption.petId.photoUrl) varPhoto[0] = adoption.petId.photoUrl;
       sendEmailRequest({
         template_id: templateRejected,
         dynamic_template_data: {
-          name: adoption['petId'].name,
+          name: adoption.petId.name,
           photoUrl: varPhoto,
         },
         to: userMail,
       });
-    }
+    });
     res.status(204).end();
   } catch (e) {
     console.error(e);
@@ -494,7 +532,7 @@ const bulkReject = async (req, res, next) => {
 
 const listFoundationRequests = async (req, res, next) => {
   try {
-    response = await AdoptionRequest.find().populate({
+    const response = await AdoptionRequest.find().populate({
       path: 'petId',
       model: Pet,
     });
@@ -518,7 +556,7 @@ const deleteUsers = async (req, res, next) => {
 
 const listUserRequests = async (req, res, next) => {
   try {
-    response = await AdoptionRequest.find({
+    const response = await AdoptionRequest.find({
       userId: req.params.userId,
     }).populate({
       path: 'petId',
@@ -531,7 +569,7 @@ const listUserRequests = async (req, res, next) => {
 };
 const adminSearch = async (req, res, next) => {
   try {
-    let toSearch = {};
+    const toSearch = {};
     toSearch[req.body.field] = req.body.value;
     const page = req.query.page || 1;
 
@@ -542,14 +580,14 @@ const adminSearch = async (req, res, next) => {
     }
 
     if (req.body.isUser) {
-      let users = await User.find(
+      const users = await User.find(
         toSearch,
         { password: 0, __v: 0, role: 0 },
         { skip: (page - 1) * 5, limit: 5 },
       );
       res.status(200).json(users);
     } else {
-      let foundation = await Foundation.find(
+      const foundation = await Foundation.find(
         toSearch,
         { password: 0, __v: 0, role: 0 },
         { skip: (page - 1) * 5, limit: 5 },

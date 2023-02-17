@@ -1,5 +1,7 @@
 {
+  "braceStyle": "1tbs",
   "singleQuote": true,
+  "jsxBracketSameLine": false,
   "semi": true,
   "endOfLine": "lf",
   "trailingComma": "all"
