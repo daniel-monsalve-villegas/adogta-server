@@ -1,22 +1,18 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
-const userSchema = mongoose.Schema(
+const UserSchema = mongoose.Schema(
   {
     email: {
       type: String,
-      match: /.+\@.+\..+/,
+      match: /.+@.+\..+/,
       required: [true, 'Email is required'],
       validate: {
-        validator: async function (value) {
-          const user = await User.findOne({ email: value });
-          const foundation = await mongoose
-            .model('Foundation')
-            .findOne({ email: value });
-          if (user) {
-            return user === null;
-          } else if (user === foundation) {
-            return user === null;
+        validator: async (value) => {
+          const user = await mongoose.model('User').findOne({ email: value });
+          const foundation = await mongoose.model('Foundation').findOne({ email: value });
+          if (user || foundation) {
+            return null;
           }
           return user;
         },
@@ -39,13 +35,15 @@ const userSchema = mongoose.Schema(
     },
     role: {
       type: String,
-      required: [true, ' Role is required'],
+      required: [true, 'Role is required'],
     },
     active: {
       type: Boolean,
       default: false,
     },
-    passwordResetToken: String,
+    passwordResetToken: {
+      type: String,
+    },
     photoUrl: {
       type: String,
     },
@@ -58,10 +56,15 @@ const userSchema = mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
-userSchema.pre('save', async function (next) {
+UserSchema.path('email').validate(async (email) => {
+  const verifyEmail = await mongoose.model('User').countDocuments({ email });
+  return !verifyEmail;
+}, 'Email already exists');
+
+UserSchema.pre('save', async (next) => {
   try {
     const hash = await bcrypt.hash(this.password, 10);
     this.password = hash;
@@ -71,10 +74,12 @@ userSchema.pre('save', async function (next) {
   }
 });
 
-userSchema.statics.authenticate = async (email, password) => {
-  let user = await User.findOne({ email });
+UserSchema.statics.authenticate = async (email, password) => {
+  let user = await mongoose.model('User').findOne({ email });
 
-  !user && (user = await mongoose.model('Foundation').findOne({ email }));
+  if (!user) {
+    user = await mongoose.model('Foundation').findOne({ email });
+  }
 
   if (user && user.active === true) {
     const result = await bcrypt.compare(password, user.password);
@@ -89,6 +94,6 @@ userSchema.statics.authenticate = async (email, password) => {
   }
 };
 
-const User = mongoose.model('User', userSchema);
+const User = mongoose.model('User', UserSchema);
 
 module.exports = User;
